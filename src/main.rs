@@ -5,6 +5,10 @@ use mime::Mime;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::str::FromStr;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style, ThemeSet};
+use syntect::parsing::SyntaxSet;
+use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 use url::Url;
 
 #[derive(Parser, Debug)]
@@ -124,7 +128,7 @@ fn print_status(response: &reqwest::Response) {
     println!("{} {}", formated_version, formated_status_code);
 }
 
-fn print_header(response:& reqwest::Response) {
+fn print_header(response: &reqwest::Response) {
     let headers = response.headers();
 
     for (name, value) in headers.iter() {
@@ -136,13 +140,23 @@ fn print_header(response:& reqwest::Response) {
 
 fn print_body(option_mime: Option<Mime>, body: &String) {
     match option_mime {
-        Some(v) => {
-            if v == mime::APPLICATION_JSON {
-                println!("{}", jsonxf::pretty_print(body).unwrap().cyan())
-            }
-        }
+        Some(v) if v == mime::TEXT_HTML => print_with_syntect(body, "html"),
+        Some(v) if v == mime::APPLICATION_JSON => print_with_syntect(body, "json"),
         _ => {
             println!("{}", body);
         }
+    }
+}
+
+fn print_with_syntect(string: &str, code_type: &str) {
+    let syntax_set = SyntaxSet::load_defaults_newlines();
+    let theme_set = ThemeSet::load_defaults();
+    let syntax = syntax_set.find_syntax_by_extension(code_type).unwrap();
+    let mut highlight_lines = HighlightLines::new(syntax, &theme_set.themes["base16-ocean.dark"]);
+
+    for line in LinesWithEndings::from(string) {
+        let ranges: Vec<(Style, &str)> = highlight_lines.highlight_line(line, &syntax_set).unwrap();
+        let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
+        print!("{}", escaped);
     }
 }
